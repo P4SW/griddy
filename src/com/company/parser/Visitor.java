@@ -72,7 +72,7 @@ public class Visitor extends GriddyDefaultVisitor {
     }
 
     public Object visit(ASTBoard node, Object data){
-        return null;
+        return data;
     }
 
     boolean isAssignedInScope(Node n, String k) {
@@ -96,6 +96,7 @@ public class Visitor extends GriddyDefaultVisitor {
 
     ArrayList<Node> getAssignedInScope(Node n, String k) {
         ArrayList<Node> output = new ArrayList<>();
+
 
         if (n.jjtGetParent() != null)
             for (Node c : n.jjtGetParent().getChildren()) {
@@ -190,31 +191,33 @@ public class Visitor extends GriddyDefaultVisitor {
 
     public Object visit(ASTDiv node, Object data) {
 
-        return null;
+        return data;
+    }
+
+    public Object visit(ASTString node, Object data){
+        return data;
+    }
+
+    public Object visit(ASTDiv node, Object data) {
+        node.jjtGetChild(0).jjtAccept(this, data);
+        System.out.print("/");
+        node.jjtGetChild(1).jjtAccept(this, data);
+
+        return data;
     }
 
     public Object visit(ASTMod node, Object data) {
-        return null;
+        node.jjtGetChild(0).jjtAccept(this, data);
+        System.out.print("%");
+        node.jjtGetChild(1).jjtAccept(this, data);
+
+        return data;
     }
 
     public Object visit(ASTMul node, Object data) {
-        return null;
-    }
-
-    public Object visit(ASTString node, Object data) {
-        out.print("\"" + node.jjtGetValue() + "\"");
-
-        return data;
-    }
-
-    public Object visit(ASTIdent node, Object data) {
-        out.print(node.getName());
-
-        return data;
-    }
-
-    public Object visit(ASTInteger node, Object data) {
-        out.print(node.jjtGetValue());
+        node.jjtGetChild(0).jjtAccept(this, data);
+        System.out.print("*");
+        node.jjtGetChild(1).jjtAccept(this, data);
 
         return data;
     }
