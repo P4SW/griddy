@@ -15,6 +15,21 @@ A programming language for board games.
 # Run build script
 sh build.sh
 
-# Test parser
-java -cp src com.company.Main < examples/example_1.griddy
+# Parse example_1 and output generated code to terminal
+java -cp output com.company.Main -f examples/example_1.griddy
+
+# Compile generated code
+gcc examples/example_1.griddy.c
 ```
+
+## Files
+
+*Primary files:*
+
+- Parsing *(JJTree)*: `src/com/company/griddy.jjt`
+- AST node interface: `src/com/company/parser/Node.java`
+- Base AST node: `src/com/company/parser/SimpleNode.java`
+- Code generation: 
+  - C target: `src/com/company/target/CVisitor.java`
+  - JS target: `src/com/company/target/JSVisitor.java`
+- Program entry: `src/com/company/Main.java`

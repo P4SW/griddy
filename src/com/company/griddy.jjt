@@ -4,21 +4,35 @@ options {
     NODE_PACKAGE = "com.company.parser";
     JJTREE_OUTPUT_DIRECTORY = "src/com/company/parser";
     VISITOR = true;
+    LOOKAHEAD = 1;
+    NODE_DEFAULT_VOID = true;
+    JDK_VERSION = "17.0";
 }
 
 PARSER_BEGIN(Griddy)
 package com.company;
 
 import java.util.ArrayList;
+import java.io.InputStream;import java.util.HashMap;
+import com.company.target.*;
+import com.company.parser.GriddyVisitor;
 
 public class Griddy {
-
-    public static void main(String args[]) {
-        Griddy parser = new Griddy(System.in);
+    Target target = Target.C;
+    public static void main(Target target, boolean tree, InputStream input, StringBuilder output) {
+        Griddy parser = new Griddy(input);
 
         try {
             ASTStart n = parser.Start();
-            n.dump("");
+            if (tree) n.dump("");
+            else {
+                GriddyVisitor v;
+                switch(target){
+                    case JS : v = new JSVisitor(); break;
+                    default : v = new CVisitor(); break;
+                }
+                n.jjtAccept(v, output);
+            }
         } catch (Exception e) {
             System.out.println("An error occurred.");
             System.out.println(e.getMessage());
@@ -30,16 +44,16 @@ public class Griddy {
 PARSER_END(Griddy)
 
 /* Whitespace characters */
-SPECIAL_TOKEN : {
+SKIP : {
         < WHITE_SPACE:  <TAB> | <NEWLINE> | <SP>    >
     |   < #SP:   " "     >
     |   < #TAB:  "\t"    >
-    |   < NEWLINE:  "\n" | "\r" | "\r\n"    >   // line endings
 }
 
 /* Comments */
 SPECIAL_TOKEN : {
         <SINGLE_LINE_COMMENT:   "#" (~["\n","\r"])* <NEWLINE>   >
+    |   < NEWLINE:  "\n" | "\r" | "\r\n"    >   // line endings
 }
 
 /* Reserved keywords */
@@ -50,11 +64,13 @@ TOKEN : {
     |   < ON:   "on"    >   // value exist on board, e.g. 'game_piece on my_board'
     |   < IN:   "in"    >   // e.g. 'for x in iterable'
     |   < FOR:  "for"   >   // for loop begin
-    |   < WHILE:"while" >   // while loop begin
+    |   < END:  "end"   >   // block end
+    |   < OUTPUT: "output"  >   // prints the output
     |   < GAME_SETUP:   "SETUP" >   // setup phase begin
     |   < GAME_MAIN:    "GAME"  >   // game phase begin
     |   < FUNC_DECL:    "fun"   >   // function declaration
     |   < BOARD_DECL:   "board" >   // board declaration token, e.g. 'board (n,m)'
+    |   < PIECE_DECL:   "piece" >   // game piece declaration token, e.g. 'piece { ...props }'
 }
 
 /* Punctuators */
@@ -84,6 +100,7 @@ TOKEN : {
     |   < DOT:      "." > : DEFAULT     // dot (struct property access maybe?)
     |   < COMMA:    "," > : DEFAULT     // seperator comma
     |   < SEMICOLON: ";"> : DEFAULT     // statement endings
+    |   < COLON:    ":" > : DEFAULT     // property assignment
     |   < LPAREN:   "(" > : DEFAULT     // left parenthesis
     |   < RPAREN:   ")" > : IN_REGEX    // right parenthesis
     |   < LBRACE:   "{" > : DEFAULT     // left curly bracket
@@ -92,7 +109,7 @@ TOKEN : {
     |   < RBRACKET: "]" > : IN_REGEX    // right square bracket
 }
 
-/* Literals */
+/* Literals (terminals) */
 <DEFAULT, IN_REGEX>
 TOKEN : {
         < BOOL: "true" | "false"    > : IN_REGEX
@@ -102,16 +119,14 @@ TOKEN : {
     |   < STRING:  "\"" (~["\"","\r","\n"])* "\"" > : DEFAULT // string literal
 }
 
-/* Identifier */
+/* Identifier (terminals) */
 TOKEN : {
-        < IDENT:        <IDENT_PART> | <IDENT_PART> (<IDENT_PART>)* >
+        < IDENT:        <IDENT_PART> (<IDENT_PART>)* >
     |   < #IDENT_PART:  (<LETTER> | "_")+ >
     |   < #LETTER:      ["a"-"z","A"-"Z"] >
 }
 
-// TODO: Define string grammar.
-
-ASTStart Start() : {}
+ASTStart Start() #Start : {}
 {
     setupPhase()
     gamePhase()
@@ -125,16 +140,22 @@ void setupPhase() #Setup : {}
     (setupStmt())*
 }
 
-void setupStmt() #void : {}
+void setupStmt() : {}
 {
-    assignment()
+        assignment() <SEMICOLON>
 }
 
 void gamePhase() #Game : {}
 {
     <GAME_MAIN>
-    // TODO: Define game phase grammar.
-    (expression() <SEMICOLON>)*
+    (gameStmt())+
+}
+
+void gameStmt() : {}
+{
+        assignment() <SEMICOLON>
+    |   outputStmt() <SEMICOLON>
+
 }
 
 void boardDeclaration() #Board :
@@ -151,41 +172,87 @@ void boardDeclaration() #Board :
     }
 }
 
-void assignment() #Assign : {}
+void pieceDeclaration() #Piece :
 {
-    identifier() <ASSIGN> (boardDeclaration() | expression() | stringLiteral()) <SEMICOLON>
+    HashMap<Node, Node> props = new HashMap<Node, Node>();
+}
+{
+    <PIECE_DECL> <LBRACE>
+    (
+        { Node k, v; }
+        k=identifier() <COLON> (v=additiveExpr() | v=stringLiteral())
+        {
+            props.put(k, v);
+            jjtThis.jjtSetValue(props);
+        }
+    )*
+    <RBRACE>
 }
 
-void identifier() #Ident : {
+void assignment() #Assign : {}
+{
+    identifier() <ASSIGN> (boardDeclaration() | pieceDeclaration() | additiveExpr() | stringLiteral())
+}
+
+
+ASTExpr additiveExpr() #Expr(>1) : {}
+{
+    multiplicativeExpr() ( additiveOperator() multiplicativeExpr() )*
+    { return jjtThis; }
+}
+
+ASTOperator additiveOperator() #Operator :
+{
+    Token t;
+}
+{
+    (t=<PLUS> | t=<MINUS>)
+    {
+        jjtThis.jjtSetValue(t.image);
+        return jjtThis;
+    }
+}
+
+void multiplicativeExpr() #Expr(>1) : {}
+{
+    unary() ( multiplicativeOperator() unary() )*
+}
+
+ASTOperator multiplicativeOperator() #Operator :
+{
+    Token t;
+}
+{
+    (t=<MULT> | t=<DIV> | t=<MOD>)
+    {
+        jjtThis.jjtSetValue(t.image);
+        return jjtThis;
+    }
+}
+
+void unary() : {}
+{
+        <LPAREN> additiveExpr() <RPAREN>
+    |   primary()
+    |   identifier()
+}
+
+void primary() : {}
+{
+        number()
+    |   bool()
+}
+
+ASTIdent identifier() #Ident :
+{
     Token t;
 }
 {
     t=<IDENT>
-    { jjtThis.jjtSetValue(t.image); }
-}
-
-void expression() #Expr : {}
-{
-    additiveExpression()
-}
-
-void additiveExpression() #void : {}
-{
-    (
-        multiplicativeExpression() ((<PLUS> | <MINUS>) multiplicativeExpression() )*
-    ) #Add(>1)
-}
-
-void multiplicativeExpression() #void : {}
-{
-    (
-        unary() ((<MULT> | <DIV> | <MOD>) unary())*
-    ) #Mult(>1)
-}
-
-void unary() #void : {}
-{
-    <LPAREN> expression() <RPAREN> | <IDENT> | number()
+    {
+        jjtThis.jjtSetValue(t.image);
+        return jjtThis;
+    }
 }
 
 ASTInteger number() #Integer :
@@ -195,7 +262,19 @@ ASTInteger number() #Integer :
 {
     t=<NUM>
     {
-        jjtThis.setValue(Integer.parseInt(t.image));
+        jjtThis.jjtSetValue(Integer.parseInt(t.image));
+        return jjtThis;
+    }
+}
+
+ASTBool bool() #Bool :
+{
+    Token t;
+}
+{
+    t=<BOOL>
+    {
+        jjtThis.jjtSetValue(t.image);
         return jjtThis;
     }
 }
@@ -207,7 +286,15 @@ ASTString stringLiteral() #String :
 {
     t=<STRING>
     {
-        jjtThis.jjtSetValue(t.image.substring(1, t.image.length()-1));
+        jjtThis.jjtSetValue(t.image.substring(1, (t.image.length() - 1)));
+        return jjtThis;
+    }
+}
+
+ASTOutput outputStmt() #Output : {}
+{
+    <OUTPUT> ( additiveExpr() | stringLiteral() )
+    {
         return jjtThis;
     }
 }
