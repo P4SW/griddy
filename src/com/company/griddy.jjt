@@ -145,7 +145,7 @@ void setupPhase() #Setup : {}
 void setupStmt() : {}
 {
         assignment() <SEMICOLON>
-}
+ }
 
 void gamePhase() #Game : {}
 {
@@ -217,6 +217,15 @@ ASTExpr expression() #Expr(>1) : {}
 {
     multiplicativeExpr() ( ( additiveOperator() | booleanOperator() ) multiplicativeExpr() )*
     { return jjtThis; }
+}
+
+ASTBoolExpr boolExpression() #BoolExpr(>1) :
+{
+    Token t;
+}
+{
+    multiplicativeExpr() (booleanOperator() multiplicativeExpr())*
+    {return jjtThis;}
 }
 
 ASTOperator additiveOperator() #Operator :
