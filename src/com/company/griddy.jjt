@@ -215,19 +215,23 @@ ASTEmpty empty() #Empty :
 
 ASTExpr expression() #Expr(>1) : {}
 {
-    multiplicativeExpr() ( ( additiveOperator() | booleanOperator() ) multiplicativeExpr() )*
+        addExpression()
+    |   boolExpression()
+    //multiplicativeExpr() ( ( additiveOperator() | booleanOperator() ) multiplicativeExpr() )*
     { return jjtThis; }
 }
 
-ASTBoolExpr boolExpression() #BoolExpr(>1) :
-{
-    Token t;
-}
+ASTBoolExpr boolExpression() #BoolExpr(>1) : {}
 {
     multiplicativeExpr() (booleanOperator() multiplicativeExpr())*
     {return jjtThis;}
 }
 
+ASTBoolExpr addExpression() #AddExpr(>1) :{}
+{
+    multiplicativeExpr() (additiveOperator() multiplicativeExpr())*
+    {return jjtThis;}
+}
 ASTOperator additiveOperator() #Operator :
 {
     Token t;
